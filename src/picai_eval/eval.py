@@ -38,18 +38,19 @@ from picai_eval.analysis_utils import (calculate_dsc, calculate_iou,
 from picai_eval.image_utils import (read_label, read_prediction,
                                     resize_image_with_crop_or_pad)
 from picai_eval.metrics import *
+import pickle
 
 PathLike = Union[str, Path]
 
 # Calculate the volume for each blob
-def calculate_blob_volumes(blobs_index):
+def calculate_blob_volumes(blobs_index, voxel_unit):
     # Count unique labels (blobs) and their occurrences
     blob_volumes = {}
     for blob_label in np.unique(blobs_index):
         if blob_label == 0:  # Skip background
             continue
         volume = np.sum(blobs_index == blob_label)
-        blob_volumes[blob_label - 1] = volume# lesion_candidate_id starts with 0
+        blob_volumes[blob_label - 1] = volume * voxel_unit# lesion_candidate_id starts with 0
     return blob_volumes
 
 # Compute base prediction metrics TP/FP/FN with associated model confidences
@@ -99,10 +100,17 @@ def evaluate_case(
         (is_lesion, prediction confidence, overlap)
     - case level confidence score derived from the detection map
     """
+    origin_spacing = np.ones(3)
     y_list: List[Dict] = []
     if isinstance(y_true, (str, Path)):
         y_true = read_label(y_true)
     if isinstance(y_det, (str, Path)):
+        # Change the extension
+        pkl_path = os.path.splitext(y_det)[0] + '.pkl'
+        # Reading the .pkl file
+        with open(pkl_path, 'rb') as file:
+            data = pickle.load(file)
+            origin_spacing = data['spacing']
         y_det = read_prediction(y_det)
     if overlap_func == 'IoU':
         overlap_func = calculate_iou
@@ -133,7 +141,8 @@ def evaluate_case(
     confidences, indexed_pred = parse_detection_map(y_det)
     lesion_candidate_ids = np.arange(len(confidences))
     # calculate volume (in voxels) for all candidate lesions
-    lesion_candidate_volumes_dict = calculate_blob_volumes(indexed_pred)
+    # convert the dimensions of a voxel to cubic centimeters (cc)
+    lesion_candidate_volumes_dict = calculate_blob_volumes(indexed_pred, np.prod(origin_spacing) / 1000)
 
     if not y_true.any():
         # benign case, all predictions are FPs
@@ -279,7 +288,7 @@ def evaluate(
     case_target: Dict[Hashable, int] = {}
     case_weight: Dict[Hashable, float] = {}
     case_pred: Dict[Hashable, float] = {}
-    lesion_results: Dict[Hashable, List[Tuple[int, float, float]]] = {}
+    lesion_results: Dict[Hashable, List[Dict]] = {}
     lesion_weight: Dict[Hashable, List[float]] = {}
 
     # construct case evaluation kwargs
