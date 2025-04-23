@@ -19,7 +19,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import (Callable, Dict, Hashable, Iterable, List, Optional, Sized,
-                    Tuple, Union)
+                    Tuple, Union, Any)
 
 import numpy as np
 from scipy import ndimage
@@ -37,10 +37,20 @@ from picai_eval.analysis_utils import (calculate_dsc, calculate_iou,
                                        label_structure, parse_detection_map)
 from picai_eval.image_utils import (read_label, read_prediction,
                                     resize_image_with_crop_or_pad)
-from picai_eval.metrics import Metrics
+from picai_eval.metrics import *
 
 PathLike = Union[str, Path]
 
+# Calculate the volume for each blob
+def calculate_blob_volumes(blobs_index):
+    # Count unique labels (blobs) and their occurrences
+    blob_volumes = {}
+    for blob_label in np.unique(blobs_index):
+        if blob_label == 0:  # Skip background
+            continue
+        volume = np.sum(blobs_index == blob_label)
+        blob_volumes[blob_label - 1] = volume# lesion_candidate_id starts with 0
+    return blob_volumes
 
 # Compute base prediction metrics TP/FP/FN with associated model confidences
 def evaluate_case(
@@ -54,7 +64,7 @@ def evaluate_case(
     y_true_postprocess_func: "Optional[Callable[[npt.NDArray[np.int32]], npt.NDArray[np.int32]]]" = None,
     weight: Optional[float] = None,
     idx: Optional[str] = None,
-) -> Tuple[List[Tuple[int, float, float]], float]:
+) -> tuple[list[dict], int | float | Any, float | None, str | None]:
     """
     Gather the list of lesion candidates, and classify in TP/FP/FN.
 
@@ -89,7 +99,7 @@ def evaluate_case(
         (is_lesion, prediction confidence, overlap)
     - case level confidence score derived from the detection map
     """
-    y_list: List[Tuple[int, float, float]] = []
+    y_list: List[Dict] = []
     if isinstance(y_true, (str, Path)):
         y_true = read_label(y_true)
     if isinstance(y_det, (str, Path)):
@@ -119,13 +129,19 @@ def evaluate_case(
         raise ValueError("All detection confidences must be positive!")
 
     # perform connected-components analysis on detection maps
+    # indexed_pred:a labeled array (blobs_index) where each blob has a unique identifier
     confidences, indexed_pred = parse_detection_map(y_det)
     lesion_candidate_ids = np.arange(len(confidences))
+    # calculate volume (in voxels) for all candidate lesions
+    lesion_candidate_volumes_dict = calculate_blob_volumes(indexed_pred)
 
     if not y_true.any():
         # benign case, all predictions are FPs
-        for lesion_confidence in confidences.values():
-            y_list.append((0, lesion_confidence, 0.))
+        # Using enumerate to get both index and value
+        for index, lesion_confidence in enumerate(confidences.values()):
+            tmp = {KEY_LABEL: 0, KEY_CONFIDENCE: lesion_confidence, KEY_OVERLAP: 0.,
+                   KEY_VOLUME: lesion_candidate_volumes_dict[index + 1]}
+            y_list.append(tmp)
     else:
         # malignant case, collect overlap between each prediction and ground truth lesion
         labeled_gt, num_gt_lesions = ndimage.label(y_true, structure=label_structure)
@@ -164,11 +180,16 @@ def evaluate_case(
 
             assert overlap > min_overlap, "Overlap must be greater than min_overlap!"
 
-            y_list.append((1, lesion_confidence, overlap))
+            tmp = {KEY_LABEL: 1, KEY_CONFIDENCE: lesion_confidence, KEY_OVERLAP: overlap,
+                   KEY_VOLUME: lesion_candidate_volumes_dict[lesion_candidate_id]}
+            y_list.append(tmp)
 
         # all ground truth lesions that are not matched are FNs
         unmatched_gt_lesions = set(gt_lesion_ids) - set(matched_lesion_indices)
-        y_list += [(1, 0., 0.) for _ in unmatched_gt_lesions]
+        for lesion_candidate_id in unmatched_gt_lesions:
+            tmp = {KEY_LABEL: 1, KEY_CONFIDENCE: 0., KEY_OVERLAP: 0.,
+                   KEY_VOLUME: lesion_candidate_volumes_dict[lesion_candidate_id]}
+            y_list.append(tmp)
 
         # all lesion candidates with insufficient overlap/not matched to a gt lesion are FPs
         if allow_unmatched_candidates_with_minimal_overlap:
@@ -176,7 +197,10 @@ def evaluate_case(
             unmatched_candidates = set(lesion_candidate_ids) - set(candidates_sufficient_overlap)
         else:
             unmatched_candidates = set(lesion_candidate_ids) - set(matched_lesion_candidate_indices)
-        y_list += [(0, confidences[lesion_candidate_id], 0.) for lesion_candidate_id in unmatched_candidates]
+        for lesion_candidate_id in unmatched_candidates:
+            tmp = {KEY_LABEL: 0, KEY_CONFIDENCE: confidences[lesion_candidate_id], KEY_OVERLAP: 0.,
+                   KEY_VOLUME: lesion_candidate_volumes_dict[lesion_candidate_id]}
+            y_list.append(tmp)
 
     # determine case-level confidence score
     if case_confidence_func == 'max':
@@ -317,7 +341,7 @@ def evaluate(
             case_weight[idx] = weight
             case_pred[idx] = case_confidence
             if len(lesion_results_case):
-                case_target[idx] = np.max([a[0] for a in lesion_results_case])
+                case_target[idx] = np.max([a[KEY_LABEL] for a in lesion_results_case])
             else:
                 case_target[idx] = 0
 

@@ -21,6 +21,11 @@ from typing import Any, Dict, Hashable, List, Optional, Tuple, Union
 import numpy as np
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
 
+KEY_LABEL = 'label'
+KEY_CONFIDENCE = 'confidence'
+KEY_OVERLAP = 'overlap'
+KEY_VOLUME = 'volume'
+
 try:
     import numpy.typing as npt
 except ImportError:  # pragma: no cover
@@ -31,7 +36,7 @@ from picai_eval.data_utils import PathLike, load_metrics, save_metrics
 
 @dataclass
 class Metrics:
-    lesion_results: Union[Dict[Hashable, List[Tuple[int, float, float]]], PathLike]
+    lesion_results: Union[Dict[Hashable, List[dict]], PathLike]
     case_target: Optional[Dict[Hashable, int]] = None
     case_pred: Optional[Dict[Hashable, float]] = None
     case_weight: Optional[Union[Dict[Hashable, float], List[float]]] = None
@@ -51,14 +56,14 @@ class Metrics:
         if self.case_target is None:
             # derive case-level targets as the maximum lesion-level target
             self.case_target = {
-                idx: max([is_lesion for is_lesion, _, _ in case_y_list]) if len(case_y_list) else 0
+                idx: max([item[KEY_LABEL] for item in case_y_list]) if len(case_y_list) else 0
                 for idx, case_y_list in self.lesion_results.items()
             }
 
         if self.case_pred is None:
             # derive case-level predictions as the maximum lesion-level prediction
             self.case_pred = {
-                idx: max([confidence for _, confidence, _ in case_y_list]) if len(case_y_list) else 0
+                idx: max([item[KEY_CONFIDENCE] for item in case_y_list]) if len(case_y_list) else 0
                 for idx, case_y_list in self.lesion_results.items()
             }
 
@@ -118,7 +123,7 @@ class Metrics:
     @property
     def num_lesions(self) -> int:
         """Calculate the number of ground truth lesions"""
-        return sum([is_lesion for is_lesion, *_ in self.lesion_results_flat])
+        return sum([item[KEY_LABEL] for item in self.lesion_results_flat])
 
     @property
     def score(self):
@@ -139,13 +144,13 @@ class Metrics:
             subject_list = self.subject_list
 
         return [
-            (is_lesion, confidence, overlap)
+            item
             for subject_id in subject_list
-            for is_lesion, confidence, overlap in self.lesion_results[subject_id]
+            for item in self.lesion_results[subject_id]
         ]
 
     @property
-    def lesion_results_flat(self) -> List[Tuple[int, float, float]]:
+    def lesion_results_flat(self) -> List[Dict]:
         """Flatten the per-case y_list"""
         return self.get_lesion_results_flat()
 
@@ -223,8 +228,8 @@ class Metrics:
         lesion_y_list = self.get_lesion_results_flat(subject_list=subject_list)
 
         # collect targets and predictions
-        y_true: "npt.NDArray[np.float64]" = np.array([target for target, *_ in lesion_y_list])
-        y_pred: "npt.NDArray[np.float64]" = np.array([pred for _, pred, *_ in lesion_y_list])
+        y_true: "npt.NDArray[np.float64]" = np.array([item[KEY_LABEL] for item in lesion_y_list])
+        y_pred: "npt.NDArray[np.float64]" = np.array([item[KEY_CONFIDENCE] for item in lesion_y_list])
 
         if self.thresholds is None:
             # collect thresholds for lesion-based analysis
@@ -270,8 +275,8 @@ class Metrics:
         lesion_y_list = self.get_lesion_results_flat(subject_list=subject_list)
 
         # collect targets and predictions
-        y_true: "npt.NDArray[np.float64]" = np.array([target for target, *_ in lesion_y_list])
-        y_pred: "npt.NDArray[np.float64]" = np.array([pred for _, pred, *_ in lesion_y_list])
+        y_true: "npt.NDArray[np.float64]" = np.array([item[KEY_LABEL] for item in lesion_y_list])
+        y_pred: "npt.NDArray[np.float64]" = np.array([item[KEY_CONFIDENCE] for item in lesion_y_list])
 
         # calculate precision-recall curve
         precision, recall, thresholds = precision_recall_curve(
@@ -330,8 +335,8 @@ class Metrics:
         lesion_y_list = self.get_lesion_results_flat(subject_list=subject_list)
 
         # collect targets and predictions
-        y_true: "npt.NDArray[np.float64]" = np.array([target for target, *_ in lesion_y_list])
-        y_pred: "npt.NDArray[np.float64]" = np.array([pred for _, pred, *_ in lesion_y_list])
+        y_true: "npt.NDArray[np.float64]" = np.array([item[KEY_LABEL] for item in lesion_y_list])
+        y_pred: "npt.NDArray[np.float64]" = np.array([item[KEY_CONFIDENCE] for item in lesion_y_list])
 
         fpr, tpr, _ = roc_curve(
             y_true=y_true,
@@ -430,8 +435,8 @@ class Metrics:
         self.lesion_weight = {idx: [float(val) for val in weights] for idx, weights in metrics['lesion_weight'].items()}
         self.lesion_results = {
             idx: [
-                (int(float(is_lesion)), float(confidence), float(overlap))
-                for (is_lesion, confidence, overlap) in lesion_results_case
+                item
+                for item in lesion_results_case
             ]
             for idx, lesion_results_case in metrics['lesion_results'].items()
         }
