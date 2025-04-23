@@ -87,10 +87,19 @@ class Metrics:
         """Calculate case-level Area Under the Receiver Operating Characteristic curve (AUROC)"""
         return self.calculate_ROC(subject_list=subject_list)['AUROC']
 
+    def calc_lesion_auroc(self, subject_list: Optional[List[str]] = None) -> float:
+        """Calculate case-level Area Under the Receiver Operating Characteristic curve (AUROC)"""
+        return self.calculate_lesion_ROC(subject_list=subject_list)['AUROC']
+
     @property
     def auroc(self) -> float:
         """Calculate case-level Area Under the Receiver Operating Characteristic curve (AUROC)"""
         return self.calc_auroc()
+
+    @property
+    def lesion_auroc(self) -> float:
+        """Calculate lesion-level Area Under the Receiver Operating Characteristic curve (AUROC)"""
+        return self.calc_lesion_auroc()
 
     def calc_AP(self, subject_list: Optional[List[str]] = None) -> float:
         """Calculate Average Precision"""
@@ -310,6 +319,33 @@ class Metrics:
             'AUROC': auroc,
         }
 
+    def calculate_lesion_ROC(self, subject_list: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Generate Receiver Operating Characteristic curve for lesion-level risk stratification.
+        """
+        if subject_list is None:
+            subject_list = self.subject_list
+
+        # flatten y_list (and select cases in subject_list)
+        lesion_y_list = self.get_lesion_results_flat(subject_list=subject_list)
+
+        # collect targets and predictions
+        y_true: "npt.NDArray[np.float64]" = np.array([target for target, *_ in lesion_y_list])
+        y_pred: "npt.NDArray[np.float64]" = np.array([pred for _, pred, *_ in lesion_y_list])
+
+        fpr, tpr, _ = roc_curve(
+            y_true=y_true,
+            y_score=y_pred
+        )
+
+        auroc = auc(fpr, tpr)
+
+        return {
+            'FPR': fpr,
+            'TPR': tpr,
+            'AUROC': auroc,
+        }
+
     @property
     def version(self):
         return "1.4.x"
@@ -318,6 +354,7 @@ class Metrics:
         return {
             # aggregates
             "auroc": self.auroc,
+            "auroc_lesion": self.lesion_auroc,
             "AP": self.AP,
             "num_cases": self.num_cases,
             "num_lesions": self.num_lesions,
@@ -337,6 +374,7 @@ class Metrics:
         return {
             # aggregates
             "auroc": self.auroc,
+            "auroc_lesion": self.lesion_auroc,
             "AP": self.AP,
             "num_cases": self.num_cases,
             "num_lesions": self.num_lesions,
@@ -399,7 +437,7 @@ class Metrics:
         }
 
     def __str__(self) -> str:
-        return f"Metrics(auroc={self.auroc:.2%}, AP={self.AP:.2%}, {self.num_cases} cases, {self.num_lesions} lesions)"
+        return f"Metrics(auroc={self.auroc:.2%}, auroc_lesion={self.lesion_auroc:.2%}, AP={self.AP:.2%}, {self.num_cases} cases, {self.num_lesions} lesions)"
 
     def __repr__(self) -> str:
         return self.__str__()
