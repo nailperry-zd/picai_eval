@@ -25,6 +25,8 @@ import numpy as np
 from scipy import ndimage
 from scipy.optimize import linear_sum_assignment
 from tqdm import tqdm
+from picai_eval.extract_lesion_candidates import *
+import datetime
 
 try:
     import numpy.typing as npt
@@ -242,6 +244,7 @@ def evaluate(
     Returns:
     - Metrics
     """
+    print(f'evaluate is called, where min_overlap={min_overlap} and overlap_func={overlap_func}')
     if sample_weight is None:
         sample_weight = itertools.repeat(1)
     if subject_list is None:
@@ -469,3 +472,51 @@ def evaluate_folder(
 
     # perform evaluation with compiled file lists
     return evaluate(y_det=y_det, y_true=y_true, subject_list=subject_list, verbose=verbose, **kwargs)
+
+
+def softmax_postprocessing_func(pred, threshold="dynamic"):
+    return extract_lesion_candidates(pred, threshold=threshold)[0]
+
+
+
+if __name__=='__main__':
+
+    subject_list = [
+      "prostate_004",
+      "prostate_028",
+      "prostate_041",
+      "prostate_052",
+      "prostate_069",
+      "prostate_094",
+      "prostate_113",
+      "prostate_121",
+      "prostate_145",
+      "prostate_154"
+    ]
+
+
+
+    # Get the current timestamp
+    current_timestamp = datetime.datetime.now().microsecond
+
+    y_true_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\labelsTr"
+    softmax_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainerFocalLoss"
+    overlap_func = 'DSC'
+    min_overlap = 0.1
+    metrics_path = rf"{softmax_dir}\metrics_{overlap_func}_{min_overlap}_{len(subject_list)}cases_full_{current_timestamp}.json"
+
+    metrics = evaluate_folder(
+        y_det_dir=softmax_dir,
+        y_true_dir=y_true_dir,
+        subject_list=subject_list,
+        pred_extensions=['.npz'],
+        y_det_postprocess_func=softmax_postprocessing_func,
+        num_parallel_calls=5,
+        overlap_func=overlap_func,
+        min_overlap=min_overlap
+    )
+
+    # save and show metrics
+    # metrics.save(metrics_path)
+    metrics.save_full(metrics_path)
+    print(metrics)
