@@ -533,7 +533,7 @@ if __name__=='__main__':
     current_timestamp = datetime.datetime.now().microsecond
 
     y_true_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\labelsTr"
-    softmax_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainerFocalLoss"
+    softmax_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainer_new"
     overlap_func = 'DSC'
     min_overlap = 0.1
     metrics_path = rf"{softmax_dir}\metrics_{overlap_func}_{min_overlap}_{len(subject_list)}cases_full_{current_timestamp}.json"

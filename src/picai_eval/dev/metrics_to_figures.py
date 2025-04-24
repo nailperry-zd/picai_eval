@@ -1,24 +1,20 @@
-from picai_eval import Metrics
+from picai_eval.metrics import *
 import openpyxl
 import numpy as np
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 
+
 def parse_ytrue_ypred(metrics_json_path):
     metrics = Metrics(metrics_json_path)
-    lesion_results = metrics.lesion_results
-    lesion_results_keys = lesion_results.keys()
-    lesion_list = []
-    for lesion_results_key in lesion_results_keys:
-        tem_list = lesion_results[lesion_results_key]
-        for lesion in tem_list:
-            lesion_list.append(lesion)
+    lesion_results = metrics.lesion_results_flat
     # collect targets and predictions
-    y_true = np.array([target for target, *_ in lesion_list])
-    y_pred = np.array([pred for _, pred, *_ in lesion_list])
-    y_overlap = np.array([overlap for _, _, overlap in lesion_list])
+    y_true = np.array([item[KEY_LABEL] for item in lesion_results])
+    y_pred = np.array([item[KEY_CONFIDENCE] for item in lesion_results])
+    y_overlap = np.array([item[KEY_OVERLAP] for item in lesion_results])
     return y_true, y_pred, y_overlap
+
 
 def compare_AUROC(metrics_json_path1, metrics_json_path2):
     # Parse the metrics
@@ -55,6 +51,7 @@ def compare_AUROC(metrics_json_path1, metrics_json_path2):
     # Show the plot
     plt.show()
 
+
 def calculate_mean_overlap(y_true, y_pred, y_overlap, threshold):
     # Identify true positives based on the current threshold
     true_positives_indices = np.where((y_true == 1) & (y_pred >= threshold))
@@ -66,6 +63,7 @@ def calculate_mean_overlap(y_true, y_pred, y_overlap, threshold):
     mean_overlap = np.mean(true_positive_overlaps) if true_positive_overlaps.size > 0 else 0
 
     return mean_overlap
+
 
 def compare_Overlap_TPs_LineFigure(metrics_json_path1, metrics_json_path2):
     # Parse the metrics
@@ -106,10 +104,12 @@ def compare_Overlap_TPs_LineFigure(metrics_json_path1, metrics_json_path2):
     # Show the plot
     plt.show()
 
+
 def get_overlaps_for_threshold(y_true, y_pred, y_overlap, threshold):
     # Get overlap values for true positives at the current threshold
     true_positives_indices = np.where((y_true == 1) & (y_pred >= threshold))
     return y_overlap[true_positives_indices], np.sum(y_true == 1)  # Return overlaps and total positives
+
 
 def compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2):
     # Parse the metrics
@@ -158,6 +158,7 @@ def compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2):
     # Show the plot
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to make room for the title
     plt.show()
+
 
 def compare_AUROC_fixed_thresholds(metrics_json_path1, metrics_json_path2, common_thresholds):
     # Parse the metrics
@@ -228,90 +229,10 @@ def compare_AUROC_fixed_thresholds(metrics_json_path1, metrics_json_path2, commo
     # Show the plot
     plt.show()
 
+
 if __name__ == '__main__':
-    metrics_json_path1 = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainerFocalLoss\metrics_DSC_0.1_10cases_full_980044.json"
-    metrics_json_path2 = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainer_new\metrics_DSC_0.1_10cases_full_318468.json"
+    metrics_json_path1 = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainerFocalLoss\metrics_DSC_0.1_10cases_full_357288.json"
+    metrics_json_path2 = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainer_new\metrics_DSC_0.1_10cases_full_281620.json"
 
     compare_AUROC(metrics_json_path1, metrics_json_path2)
     compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2)
-    # metrics_json_dir = r"C:\Users\dzha937\DEV\RSTrial\Dataset713_picai_baseline\nnunetv2-vanilla-prediction0"
-    # metrics_json_dir = r"C:\Users\dzha937\DEV\RSTrial\Ella_cropped"
-    # metrics_json_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainerFocalLoss"
-    # metrics_json_dir = r"C:\Users\dzha937\DEV\PICAI\Dataset713_picai_baseline\val"
-    # metrics_json_path = rf"{metrics_json_dir}\metrics_DSC_0.1_10cases_full_980044.json"
-    # metrics_json_path = rf"{metrics_json_dir}\metrics_DSC_0.1_10cases_full_980044.json"
-    # metrics_json_path = rf"{metrics_json_dir}\metrics_DSC_509849.json"
-    # metrics_json_path = rf"{metrics_json_dir}\metrics_IoU_270247.json"
-    # metrics_json_excel_path = rf"{metrics_json_dir}\metrics_DSC_0.1_10cases_full_15939.json.xlsx"
-    # metrics = Metrics(metrics_json_path)
-    # print(f'lesion-level metrics.AP={metrics.AP}')
-    # print(f'patient-level metrics.auroc={metrics.auroc}')
-
-    # lesion_results = metrics.lesion_results
-
-    # lesion_results_keys = lesion_results.keys()
-    # lesion_index = 1
-    # lesion_list_raw = []
-    # lesion_list = []
-    # for lesion_results_key in lesion_results_keys:
-    #     tem_list = lesion_results[lesion_results_key]
-    #     for lesion in tem_list:
-    #         lesion_list_raw.append(lesion)
-    #         lesion_entry = dict()
-    #         # if lesion[0] == 1:
-    #         lesion_entry['index'] = lesion_index
-    #         lesion_entry['patient_id'] = lesion_results_key
-    #         lesion_entry['overlap'] = lesion[2]
-    #         lesion_entry['confidence'] = lesion[1]
-    #         lesion_entry['pred'] = 1 if lesion[1] > 0.5 else 0
-    #         lesion_entry['label'] = lesion[0]
-    #         print(f'lesion {lesion_index}, {lesion_results_key}, overlap: {lesion[2]}, confidence: {lesion[1]}')
-    #         lesion_list.append(lesion_entry)
-    #         lesion_index = lesion_index + 1
-
-    # collect targets and predictions
-    # y_true = np.array([target for target, *_ in lesion_list_raw])
-    # y_pred = np.array([pred for _, pred, *_ in lesion_list_raw])
-    # # Set a threshold to convert probabilities to binary predictions
-    # threshold = 0.5
-    # y_pred = (y_pred > threshold).astype(int)  # Convert to binary
-    #
-    # # Calculate confusion matrix
-    # cm = confusion_matrix(y_true, y_pred)
-    # TN, FP, FN, TP = cm.ravel()
-    #
-    # # Calculate sensitivity and specificity
-    # sensitivity = TP / (TP + FN) if (TP + FN) > 0 else 0
-    # specificity = TN / (TN + FP) if (TN + FP) > 0 else 0
-    #
-    # # Print the confusion matrix and metrics
-    # print("Confusion Matrix:")
-    # print(cm)
-    # print(f"Sensitivity: {sensitivity:.2f}")
-    # print(f"Specificity: {specificity:.2f}")
-    #
-    #
-    #
-    # # Create a new workbook
-    # workbook = openpyxl.Workbook()
-    #
-    # # Get the active worksheet
-    # worksheet = workbook.active
-    #
-    # # Write the header row
-    # worksheet['A1'] = 'Index'
-    # worksheet['B1'] = 'Patient ID'
-    # worksheet['C1'] = 'Overlap'
-    # worksheet['D1'] = 'Confidence'
-    # worksheet['E1'] = 'Prediction'
-    # worksheet['F1'] = 'Label'
-    #
-    # # Write the data to the worksheet
-    # for row_index, entry in enumerate(lesion_list, start=2):
-    #     for col_index, (item, value) in enumerate(entry.items(), start=1):
-    #         worksheet.cell(row=row_index, column=col_index, value=value)
-    #
-    # # Save the workbook to a file
-    # workbook.save(metrics_json_excel_path)
-
-
