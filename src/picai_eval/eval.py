@@ -195,10 +195,9 @@ def evaluate_case(
 
         # all ground truth lesions that are not matched are FNs
         unmatched_gt_lesions = set(gt_lesion_ids) - set(matched_lesion_indices)
-        for lesion_candidate_id in unmatched_gt_lesions:
-            tmp = {KEY_LABEL: 1, KEY_CONFIDENCE: 0., KEY_OVERLAP: 0.,
-                   KEY_VOLUME: lesion_candidate_volumes_dict[lesion_candidate_id]}
-            y_list.append(tmp)
+        tmp = {KEY_LABEL: 1, KEY_CONFIDENCE: 0., KEY_OVERLAP: 0.,
+               KEY_VOLUME: 0}
+        y_list += [tmp for _ in unmatched_gt_lesions]
 
         # all lesion candidates with insufficient overlap/not matched to a gt lesion are FPs
         if allow_unmatched_candidates_with_minimal_overlap:
