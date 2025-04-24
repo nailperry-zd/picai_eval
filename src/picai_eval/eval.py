@@ -149,7 +149,7 @@ def evaluate_case(
         # Using enumerate to get both index and value
         for index, lesion_confidence in enumerate(confidences.values()):
             tmp = {KEY_LABEL: 0, KEY_CONFIDENCE: lesion_confidence, KEY_OVERLAP: 0.,
-                   KEY_VOLUME: lesion_candidate_volumes_dict[index + 1]}
+                   KEY_VOLUME: lesion_candidate_volumes_dict[index]}
             y_list.append(tmp)
     else:
         # malignant case, collect overlap between each prediction and ground truth lesion
