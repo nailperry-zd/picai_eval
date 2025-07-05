@@ -33,9 +33,19 @@ def parse_lesion_list(metrics_json_path):
     # Create a DataFrame
     df = pd.DataFrame(rows)
 
+    # ======= NEW FEATURES ========
+    num_label_1 = (df["label"] == 1).sum()
+    num_hit = (df["group"] == "hit").sum()
+    median_overlap_hit = df.loc[df["group"] == "hit", "overlap(DSC)"].median()
+
+    print(f"Number of rows with label == 1: {num_label_1}")
+    print(f"Number of rows where group == 'hit': {num_hit}")
+    print(f"Median overlap(DSC) for 'hit' group: {median_overlap_hit:.4f}")
+    # =============================
+
     # Export to Excel
     df.to_excel(output_file_path, index=False)
 
 if __name__ == '__main__':
-    metrics_json_path = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainer_new\metrics_DSC_0.1_10cases_full_281620.json"
+    metrics_json_path = r"Y:\picai\workdir\nnUNet_results\nnUNet\3d_fullres\Task822_PICAI_Expert\nnUNetTrainerV2_Loss_FL_and_CE_checkpoints_FL0__nnUNetPlansv2.1\fold_0\validation_raw-best\metrics_DSC_0.1_44cases_full_67335.json"
     parse_lesion_list(metrics_json_path)

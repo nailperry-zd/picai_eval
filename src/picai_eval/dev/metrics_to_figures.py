@@ -16,7 +16,7 @@ def parse_ytrue_ypred(metrics_json_path):
     return y_true, y_pred, y_overlap
 
 
-def compare_AUROC(metrics_json_path1, metrics_json_path2):
+def compare_AUROC(metrics_json_path1, metrics_json_path2, model1, model2):
     # Parse the metrics
     y_true1, y_pred1, _ = parse_ytrue_ypred(metrics_json_path1)
     y_true2, y_pred2, _ = parse_ytrue_ypred(metrics_json_path2)
@@ -33,8 +33,8 @@ def compare_AUROC(metrics_json_path1, metrics_json_path2):
 
     # Plotting the ROC curves
     plt.figure()
-    plt.plot(fpr1, tpr1, color='blue', lw=2, label=f'Model 1 (AUC = {roc_auc1:.2f})')
-    plt.plot(fpr2, tpr2, color='green', lw=2, label=f'Model 2 (AUC = {roc_auc2:.2f})')
+    plt.plot(fpr1, tpr1, color='blue', lw=2, label=f'{model1} (AUC = {roc_auc1:.4f})')
+    plt.plot(fpr2, tpr2, color='green', lw=2, label=f'{model2} (AUC = {roc_auc2:.4f})')
 
     # Plotting the diagonal line for random guess
     plt.plot([0, 1], [0, 1], color='grey', linestyle='--')
@@ -44,7 +44,7 @@ def compare_AUROC(metrics_json_path1, metrics_json_path2):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.title('(a) Receiver Operating Characteristic (ROC) Curve (Val Set)')
     plt.legend(loc='lower right')
     plt.grid()
 
@@ -105,19 +105,19 @@ def compare_Overlap_TPs_LineFigure(metrics_json_path1, metrics_json_path2):
     plt.show()
 
 
-def get_overlaps_for_threshold(y_true, y_pred, y_overlap, threshold):
+def get_overlaps_for_threshold(y_true, y_pred, y_overlap, confidence_threshold):
     # Get overlap values for true positives at the current threshold
-    true_positives_indices = np.where((y_true == 1) & (y_pred >= threshold))
+    true_positives_indices = np.where((y_true == 1) & (y_pred > confidence_threshold))
     return y_overlap[true_positives_indices], np.sum(y_true == 1)  # Return overlaps and total positives
 
 
-def compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2):
+def compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2, model1, model2):
     # Parse the metrics
     y_true1, y_pred1, y_overlap1 = parse_ytrue_ypred(metrics_json_path1)
     y_true2, y_pred2, y_overlap2 = parse_ytrue_ypred(metrics_json_path2)
 
     # Define selected thresholds for subplots
-    selected_thresholds = [0.1, 0.3, 0.5, 0.7]  # Updated thresholds
+    selected_thresholds = [0, 0.05, 0.1, 0.3]  # Updated thresholds
     num_thresholds = len(selected_thresholds)
 
     # Create subplots in a 2x2 grid
@@ -133,19 +133,19 @@ def compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2):
         axes[i].boxplot([overlaps1, overlaps2], positions=[1, 2], widths=0.3)
 
         # Overlay individual points
-        axes[i].scatter(np.ones(len(overlaps1)), overlaps1, color='blue', alpha=0.6, label='Model 1 Points')
-        axes[i].scatter(np.ones(len(overlaps2)) * 2, overlaps2, color='green', alpha=0.6, label='Model 2 Points')
+        axes[i].scatter(np.ones(len(overlaps1)), overlaps1, color='blue', alpha=0.6, label=f'{model1} Points')
+        axes[i].scatter(np.ones(len(overlaps2)) * 2, overlaps2, color='green', alpha=0.6, label=f'{model2} Points')
 
         # Annotate with TP count and total positives
         tp_count1 = len(overlaps1)
         tp_count2 = len(overlaps2)
-        axes[i].text(1, np.max(overlaps1) + 0.02, f'TP: {tp_count1}/{total_positives1}', ha='center', color='blue')
-        axes[i].text(2, np.max(overlaps2) + 0.02, f'TP: {tp_count2}/{total_positives2}', ha='center', color='green')
+        axes[i].text(1 + 0.25, np.max(overlaps1) - 0.02, f'TP: {tp_count1}/{total_positives1}', ha='center', color='blue')
+        axes[i].text(2 + 0.25, np.max(overlaps2) - 0.02, f'TP: {tp_count2}/{total_positives2}', ha='center', color='green')
 
         # Set labels and title
         axes[i].set_xticks([1, 2])
-        axes[i].set_xticklabels(['Model 1', 'Model 2'])
-        axes[i].set_title(f'Threshold: {threshold}')
+        axes[i].set_xticklabels([model1, model2])
+        axes[i].set_title(f'Lesion Confidence Threshold: {threshold}')
         axes[i].set_ylabel('Overlap Values')
         # axes[i].grid()
 
@@ -153,7 +153,7 @@ def compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2):
         axes[i].set_ylim(0.1, 1.0)  # Adjust y-axis limits
 
     # Set the overall title for the figure
-    plt.suptitle('Overlap Values Distribution for True Positives at Selected Thresholds', fontsize=16)
+    plt.suptitle('Overlap Distribution for True Positives at Selected Lesion Confidence Thresholds', fontsize=16)
 
     # Show the plot
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to make room for the title
@@ -231,8 +231,16 @@ def compare_AUROC_fixed_thresholds(metrics_json_path1, metrics_json_path2, commo
 
 
 if __name__ == '__main__':
-    metrics_json_path1 = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainerFocalLoss\metrics_DSC_0.1_10cases_full_357288.json"
-    metrics_json_path2 = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainer_new\metrics_DSC_0.1_10cases_full_281620.json"
+    model1 = 'nnUNet_302_FL'
+    model2 = 'nnUNet_302_FL_FP'
+    # Val Set
+    metrics_json_path1 = r"Y:\picai\workdir\nnUNet_results\nnUNet\3d_fullres\Task2402_Z_SSMNet\nnUNetTrainerV2_Loss_FL_and_CE_checkpoints__nnUNetPlansv2.1\fold_0\validation_raw\metrics_DSC_0.1_262cases_full_603569.json"
+    metrics_json_path2 = r"Y:\picai\workdir\nnUNet_results\nnUNet\3d_fullres\Task2402_Z_SSMNet\nnUNetTrainerV2_Loss_FL_and_CE_checkpoints__nnUNetPlansv2.1\fold_0\validation_raw\metrics_DSC_0.1_300cases_full_937224.json"
 
-    compare_AUROC(metrics_json_path1, metrics_json_path2)
-    compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2)
+    # Test Set
+    # metrics_json_path1 = r"Y:\rstrial\input\images\batch1to5_noncropped_originals_checkedforPYR_b2000\prediction0_Task2402_Z_SSMNet_Z_SSMNet_602_FL_1000_best\metrics_DSC_0.1_33cases_full_996772.json"
+    # metrics_json_path2 = r"Y:\rstrial\input\images\batch1to5_noncropped_originals_checkedforPYR_b2000\prediction0_Task2402_Z_SSMNet_Z_SSMNet_602_DC_1000_best\metrics_DSC_0.1_33cases_full_699288.json"
+
+
+    compare_AUROC(metrics_json_path1, metrics_json_path2, model1, model2)
+    # compare_Overlap_TPs_Plotbox(metrics_json_path1, metrics_json_path2, model1, model2)

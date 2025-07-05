@@ -39,8 +39,55 @@ from picai_eval.image_utils import (read_label, read_prediction,
                                     resize_image_with_crop_or_pad)
 from picai_eval.metrics import *
 import pickle
-
+import SimpleITK as sitk
 PathLike = Union[str, Path]
+
+zonal_mask_dir = r"D:\Archive\dzha937\picai\workdir\nnUNet_raw_data\Dataset492_picai_baseline\imagesTr"
+
+def enlarge_bounding_box(zonalmask_path, enlarge_cm=5):
+    # Read zonal mask
+    zonal_mask = sitk.ReadImage(zonalmask_path)
+
+    # Get spacing
+    spacing = zonal_mask.GetSpacing()
+    spacing_t = (spacing[2], spacing[0], spacing[1])
+
+    # Convert zonal mask to numpy array
+    mask_array = sitk.GetArrayFromImage(zonal_mask)
+
+    # Find indices of non-zero regions
+    non_zero_indices = np.argwhere(mask_array > 0)
+
+    # If there are no non-zero regions, return the original image
+    if non_zero_indices.size == 0:
+        return zonal_mask
+
+    # Calculate bounding box
+    min_indices = non_zero_indices.min(axis=0)
+    max_indices = non_zero_indices.max(axis=0)
+
+    # Calculate number of voxels for each direction
+    enlarge_voxels = [int(enlarge_cm / s) for s in spacing_t]
+
+    # Calculate new bounding box
+    new_min_indices = np.maximum(min_indices - enlarge_voxels, 0)
+    new_max_indices = np.minimum(max_indices + enlarge_voxels, mask_array.shape)
+
+    # Create a copy of the original array to modify
+    enlarged_array = np.copy(mask_array)
+
+    # Fill the enlarged bounding box with value 9, preserving original values
+    enlarged_array[new_min_indices[0]:new_max_indices[0],
+                   new_min_indices[1]:new_max_indices[1],
+                   new_min_indices[2]:new_max_indices[2]] = np.where(
+                       enlarged_array[new_min_indices[0]:new_max_indices[0],
+                                      new_min_indices[1]:new_max_indices[1],
+                                      new_min_indices[2]:new_max_indices[2]] == 0, 9, enlarged_array[new_min_indices[0]:new_max_indices[0],
+                                                                                                 new_min_indices[1]:new_max_indices[1],
+                                                                                                 new_min_indices[2]:new_max_indices[2]]
+                   )
+
+    return enlarged_array
 
 # Calculate the volume for each blob
 def calculate_blob_volumes(blobs_index, voxel_unit):
@@ -110,8 +157,14 @@ def evaluate_case(
         # Reading the .pkl file
         with open(pkl_path, 'rb') as file:
             data = pickle.load(file)
-            origin_spacing = data['spacing']
+            if 'spacing' in data:
+                origin_spacing = data['spacing']
+            elif 'original_spacing' in data:
+                origin_spacing = data['original_spacing']
         y_det = read_prediction(y_det)
+        # zonalmask_filename = os.path.basename(y_det)[:-4] + '_0003.nii.gz'
+        # zonalmask_path = os.path.join(zonal_mask_dir, zonalmask_filename)
+        # zonalmask = enlarge_bounding_box(zonalmask_path)
     if overlap_func == 'IoU':
         overlap_func = calculate_iou
     elif overlap_func == 'DSC':
@@ -136,7 +189,29 @@ def evaluate_case(
     if np.min(y_det) < 0:
         raise ValueError("All detection confidences must be positive!")
 
-    # perform connected-components analysis on detection maps
+    # check connected component of the detection map within prostate area
+    # binary_detection_map = (y_det > 0).astype(np.uint8)
+    # binary_detection_map: sitk.Image = sitk.GetImageFromArray(binary_detection_map)
+    # binary_detection_map.CopyInformation(sitk.ReadImage(str(zonalmask_path)))
+    #
+    # cc_filter = sitk.ConnectedComponentImageFilter()
+    # cc_filter.SetFullyConnected(True)
+    # out_mask = cc_filter.Execute(binary_detection_map)
+    # out_mask_array = sitk.GetArrayFromImage(out_mask)
+    #
+    # num_cc = cc_filter.GetObjectCount()
+    # for i in range(1, num_cc + 1):
+    #     # select the connected component
+    #     cc = (out_mask_array == i).astype(np.uint8)
+    #     # calculate the intersection with zonal mask
+    #     intersection = np.sum(cc * zonalmask)
+    #     if intersection == 0:
+    #         # remove the connected component that without intersection with zonal mask
+    #         y_det[cc == 1] = 0
+    #         print(f"{zonalmask_filename} removed a FP connected component")
+    #     else:
+    #         continue
+
     # indexed_pred:a labeled array (blobs_index) where each blob has a unique identifier
     confidences, indexed_pred = parse_detection_map(y_det)
     lesion_candidate_ids = np.arange(len(confidences))
@@ -509,39 +584,48 @@ def evaluate_folder(
 def softmax_postprocessing_func(pred, threshold="dynamic"):
     return extract_lesion_candidates(pred, threshold=threshold)[0]
 
+def collect_subject_list(pred_dir):
+    # Initialize an empty list to store the unit filenames
+    unit_filenames = []
 
+    # Iterate through the files in the specified directory
+    for filename in os.listdir(pred_dir):
+        # Check if the file is a .nii.gz or .npz file
+        if filename.endswith('.npz'):
+            # Extract the unit filename (without the extension)
+            unit_filename = filename.split('.')[0]  # This will take the part before the first dot
+            unit_filenames.append(unit_filename)
+
+    return unit_filenames
 
 if __name__=='__main__':
-
-    subject_list = [
-      "prostate_004",
-      "prostate_028",
-      "prostate_041",
-      "prostate_052",
-      "prostate_069",
-      "prostate_094",
-      "prostate_113",
-      "prostate_121",
-      "prostate_145",
-      "prostate_154"
-    ]
-
-
-
     # Get the current timestamp
     current_timestamp = datetime.datetime.now().microsecond
 
-    y_true_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\labelsTr"
-    softmax_dir = r"Y:\rstrial\input\images\batch1_noncropped_highb0002_registered_manual\Dataset302_rstrial_batch1\prediction0_Dataset713_picai_baseline_nnUNetTrainer_new"
+    # y_true_dir = r"Y:\rstrial\input\images\batch1to5_noncropped_originals_checkedforPYR_b2000\labelsTr"
+    # y_true_dir = r"D:\Archive\dzha937\prostatex_recollected\workdir\nnUNet_preprocessed\Dataset3422_ProstatexRecollected\gt_segmentations"
+    # y_true_dir = r"C:\Users\dzha937\DEV\PICAI\Task2402_Z_SSMNet\gt_segmentations"
+    y_true_dir = r"Y:\picai\workdir\nnUNet_preprocessed\Task822_PICAI_Expert\gt_segmentations"
+    # y_true_dir = r"Y:\picai\workdir\nnUNet_preprocessed\Dataset713_picai_baseline\gt_segmentations"
+    # pred_dir = r"C:\Users\dzha937\DEV\PICAI\Task2402_Z_SSMNet\nnUNetTrainerV2_Loss_FL_Gamma5__nnUNetPlansv2.1\fold_1\validation_raw"
+    pred_dir = r"Y:\picai\workdir\nnUNet_results\nnUNet\3d_fullres\Task822_PICAI_Expert\nnUNetTrainerV2_Loss_FL_and_CE_checkpoints_FL0__nnUNetPlansv2.1\fold_0\validation_raw-best"
+    subject_list = collect_subject_list(pred_dir)
+    # subject_list = ['10047_1000047',
+    #                 '10070_1000070'
+    #                 ]
+    # subject_list = [subject_list[-2],
+    #                 subject_list[-1]
+    #                 ]
     overlap_func = 'DSC'
     min_overlap = 0.1
-    metrics_path = rf"{softmax_dir}\metrics_{overlap_func}_{min_overlap}_{len(subject_list)}cases_full_{current_timestamp}.json"
+    metrics_path = rf"{pred_dir}\metrics_{overlap_func}_{min_overlap}_{len(subject_list)}cases_full_{current_timestamp}.json"
 
     metrics = evaluate_folder(
-        y_det_dir=softmax_dir,
+        y_det_dir=pred_dir,
         y_true_dir=y_true_dir,
         subject_list=subject_list,
         pred_extensions=['.npz'],
+        # label_extensions=['.npz'],
         y_det_postprocess_func=softmax_postprocessing_func,
         num_parallel_calls=5,
         overlap_func=overlap_func,
