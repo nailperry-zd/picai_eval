@@ -36,16 +36,18 @@ def parse_lesion_list(metrics_json_path):
     # ======= NEW FEATURES ========
     num_label_1 = (df["label"] == 1).sum()
     num_hit = (df["group"] == "hit").sum()
+    median_overlap_all = df.loc[df["label"] == 1, "overlap(DSC)"].median()
     median_overlap_hit = df.loc[df["group"] == "hit", "overlap(DSC)"].median()
 
     print(f"Number of rows with label == 1: {num_label_1}")
     print(f"Number of rows where group == 'hit': {num_hit}")
     print(f"Median overlap(DSC) for 'hit' group: {median_overlap_hit:.4f}")
+    print(f"Median overlap(DSC) for 'label==1' group: {median_overlap_all:.4f}")
     # =============================
 
     # Export to Excel
     df.to_excel(output_file_path, index=False)
 
 if __name__ == '__main__':
-    metrics_json_path = r"Y:\picai\workdir\nnUNet_results\nnUNet\3d_fullres\Task822_PICAI_Expert\nnUNetTrainerV2_Loss_FL_and_CE_checkpoints_FL0__nnUNetPlansv2.1\fold_0\validation_raw-best\metrics_DSC_0.1_44cases_full_67335.json"
+    metrics_json_path = r"Y:\picai\picai_nnunet_semi_supervised_gc_algorithm\results\nnUNet\3d_fullres\Task2402_Z_SSMNet\nnUNetTrainerV2_CELossNonBatch_SPL_HardFirst__nnUNetPlansv2.1\fold_0\validation_raw-final\metrics_DSC_0.1_300cases_full_26433.json"
     parse_lesion_list(metrics_json_path)
