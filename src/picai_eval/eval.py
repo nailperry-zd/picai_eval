@@ -618,7 +618,7 @@ if __name__=='__main__':
     #                 ]
     overlap_func = 'DSC'
     min_overlap = 0.1
-    metrics_path = rf"{pred_dir}\metrics_{overlap_func}_{min_overlap}_{len(subject_list)}cases_full_{current_timestamp}.json"
+    metrics_path = os.path.join(pred_dir, rf"metrics_{overlap_func}_{min_overlap}_{len(subject_list)}cases_full_{current_timestamp}.json")
 
     metrics = evaluate_folder(
         y_det_dir=pred_dir,
