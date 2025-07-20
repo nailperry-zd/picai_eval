@@ -281,7 +281,7 @@ class Metrics:
         # calculate precision-recall curve
         precision, recall, thresholds = precision_recall_curve(
             y_true=y_true,
-            probas_pred=y_pred,
+            y_score=y_pred,
             sample_weight=self.get_lesion_weight_flat(subject_list=subject_list)
         )
 
