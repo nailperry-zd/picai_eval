@@ -42,7 +42,7 @@ import pickle
 import SimpleITK as sitk
 PathLike = Union[str, Path]
 
-zonal_mask_dir = r"D:\Archive\dzha937\picai\workdir\nnUNet_raw_data\Dataset492_picai_baseline\imagesTr"
+# zonal_mask_dir = r"D:\Archive\dzha937\picai\workdir\nnUNet_raw_data\Dataset492_picai_baseline\imagesTr"
 
 def enlarge_bounding_box(zonalmask_path, enlarge_cm=5):
     # Read zonal mask
